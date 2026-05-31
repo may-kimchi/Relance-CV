@@ -3,8 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Gestionnaire de Relances de Candidatures</title>
+  <title>Gestionnaire de Relances de Candidatures (Cloud)</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Inclusion de la bibliothèque Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     body { background: #0f172a; }
     .card { background: rgba(15, 23, 42, 0.92); }
@@ -16,22 +18,21 @@
 <body class="text-slate-100 min-h-screen">
 
   <div class="max-w-6xl mx-auto p-4 md:p-6">
+    <!-- En-tête -->
     <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-6">
       <div>
-        <h1 class="text-2xl md:text-4xl font-bold">Suivi de mes Candidatures</h1>
-        <p class="text-slate-400 mt-1">Application portable pour ne pas oublier de relancer après un CV</p>
+        <h1 class="text-2xl md:text-4xl font-bold">Suivi de mes Candidatures (Cloud)</h1>
+        <p class="text-slate-400 mt-1">Données synchronisées en temps réel sur Supabase</p>
       </div>
       <div class="flex gap-2 flex-wrap">
-        <button id="exportBtn" class="px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 text-sm">Exporter JSON</button>
-        <label class="px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 cursor-pointer text-sm">
-          Importer JSON
-          <input id="importInput" type="file" accept="application/json" class="hidden">
-        </label>
+        <span id="connectionStatus" class="px-3 py-1 rounded-full text-xs font-semibold bg-amber-600 text-amber-50 flex items-center">Connexion...</span>
         <button id="clearAllBtn" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-sm">Tout effacer</button>
       </div>
     </div>
 
+    <!-- Grille Principale -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Formulaire d'Ajout / Modification -->
       <div class="card glass rounded-2xl border border-slate-700 p-5 lg:col-span-1">
         <h2 id="formTitle" class="text-xl font-semibold mb-4">Ajouter une candidature</h2>
 
@@ -66,6 +67,7 @@
 
         <hr class="border-slate-700 my-6">
 
+        <!-- Réglages du Modèle de Mail -->
         <h2 class="text-xl font-semibold mb-4">Modèle de l'e-mail</h2>
 
         <div class="space-y-4">
@@ -80,7 +82,7 @@
           </div>
 
           <p class="text-xs text-slate-400 leading-relaxed">
-            Variables automatiques utilisables : <code class="text-blue-400">{entreprise}</code>, <code class="text-blue-400">{jours}</code>, <code class="text-blue-400">{date}</code>
+            Variables automatiques : <code class="text-blue-400">{entreprise}</code>, <code class="text-blue-400">{jours}</code>, <code class="text-blue-400">{date}</code>
           </p>
 
           <button id="saveTemplateBtn" class="w-full rounded-xl bg-emerald-600 hover:bg-emerald-500 py-3 font-semibold transition">
@@ -89,6 +91,7 @@
         </div>
       </div>
 
+      <!-- Tableau de bord -->
       <div class="lg:col-span-2 space-y-4">
         <div class="card glass rounded-2xl border border-slate-700 p-5">
           <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
@@ -108,9 +111,12 @@
   </div>
 
   <script>
-    const STORAGE_KEY = "job_followup_manager_v1";
+    // === CONFIGURATION SUPABASE ===
+    const SUPABASE_URL = "https://eyrzntftpqjiggvibntl.supabase.co"; 
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV5cnpudGZ0cHFqaWdndmlibnRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNTY3MjMsImV4cCI6MjA5NTgzMjcyM30.Z00m-3xASVzUIyetukl9ZIhH0NtAvv8F-VOAHeRtir4";
 
-    // Modèle de mail par défaut entièrement en français
+    const supabase = Supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
     const defaultTemplate = {
       subject: "Suivi de ma candidature - {entreprise}",
       message: `Bonjour l'équipe de {entreprise},
@@ -123,9 +129,7 @@ En vous souhaitant une excellente journée.
 
 Cordialement,
 [Ton Prénom] [Ton Nom]
-[Ton Téléphone]
-
-(Pense à attacher ton CV ou à mettre un lien vers ton CV avant d'envoyer !)`
+[Ton Téléphone]`
     };
 
     let state = {
@@ -135,22 +139,33 @@ Cordialement,
     
     let editingAppId = null; 
 
-    function loadState() {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
+    // Chargement initial depuis Supabase + LocalStorage pour le template textuel
+    async function loadData() {
+      const statusEl = document.getElementById("connectionStatus");
       try {
-        const parsed = JSON.parse(raw);
-        state = {
-          applications: Array.isArray(parsed.applications) ? parsed.applications : [],
-          template: parsed.template || defaultTemplate
-        };
-      } catch (e) {
-        console.error("Erreur lors du chargement des données :", e);
-      }
-    }
+        // 1. Charger les candidatures depuis Supabase
+        const { data, error } = await supabase
+          .from('candidatures')
+          .select('*');
 
-    function saveState() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        if (error) throw error;
+
+        state.applications = data || [];
+        
+        // 2. Le template reste sur le téléphone (pratique pour modifier à la volée)
+        const localTemplate = localStorage.getItem("cv_email_template");
+        if (localTemplate) {
+          state.template = JSON.parse(localTemplate);
+        }
+
+        statusEl.textContent = "Nuage Connecté";
+        statusEl.className = "px-3 py-1 rounded-full text-xs font-semibold bg-emerald-600 text-emerald-50";
+      } catch (e) {
+        console.error(e);
+        statusEl.textContent = "Erreur Cloud";
+        statusEl.className = "px-3 py-1 rounded-full text-xs font-semibold bg-red-600 text-red-50";
+      }
+      render();
     }
 
     function formatDate(dateStr) {
@@ -160,14 +175,14 @@ Cordialement,
 
     function replacePlaceholders(template, app) {
       return template
-        .replaceAll("{entreprise}", app.companyName)
-        .replaceAll("{jours}", app.delayDays)
-        .replaceAll("{date}", formatDate(app.sentDate));
+        .replaceAll("{entreprise}", app.nom_entreprise)
+        .replaceAll("{jours}", app.delai)
+        .replaceAll("{date}", formatDate(app.date_envoi));
     }
 
     function getFollowupDate(app) {
-      const d = new Date(app.sentDate);
-      d.setDate(d.getDate() + Number(app.delayDays));
+      const d = new Date(app.date_envoi);
+      d.setDate(d.getDate() + Number(app.delai));
       return d;
     }
 
@@ -188,7 +203,7 @@ Cordialement,
     function openMailClient(app) {
       const subject = replacePlaceholders(state.template.subject, app);
       const body = replacePlaceholders(state.template.message, app);
-      const mailto = `mailto:${encodeURIComponent(app.contactEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      const mailto = `mailto:${encodeURIComponent(app.email_contact)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       window.location.href = mailto;
     }
 
@@ -202,7 +217,7 @@ Cordialement,
       if (!state.applications.length) {
         list.innerHTML = `
           <div class="card glass rounded-2xl border border-slate-700 p-6 text-center text-slate-400">
-            Aucune candidature enregistrée pour le moment. Remplis le formulaire de gauche pour commencer.
+            Aucune candidature dans la base de données.
           </div>
         `;
         statsText.textContent = "0 candidature active";
@@ -210,12 +225,12 @@ Cordialement,
       }
 
       const dueCount = state.applications.filter(isFollowupDue).length;
-      statsText.textContent = `${state.applications.length} candidature(s) au total • ${dueCount} prête(s) à être relancée(s)`;
+      statsText.textContent = `${state.applications.length} candidature(s) au total • ${dueCount} prête(s)`;
 
       list.innerHTML = state.applications
         .slice()
         .sort((a, b) => getFollowupDate(a) - getFollowupDate(b))
-        .map((app, idx) => {
+        .map((app) => {
           const due = isFollowupDue(app);
           const daysLeft = remainingDays(app);
           const dueDate = formatDate(getFollowupDate(app));
@@ -225,21 +240,21 @@ Cordialement,
               <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
                   <div class="flex items-center gap-2 flex-wrap">
-                    <h3 class="text-lg font-semibold">${escapeHtml(app.companyName)}</h3>
+                    <h3 class="text-lg font-semibold">${escapeHtml(app.nom_entreprise)}</h3>
                     <span class="text-xs px-2 py-1 rounded-full font-medium ${due ? 'bg-emerald-600 text-emerald-50' : 'bg-slate-700 text-slate-300'}">
-                      ${due ? 'À RELANCER' : `J-${daysLeft} avant relance`}
+                      ${due ? 'À RELANCER' : `J-${daysLeft}`}
                     </span>
                   </div>
-                  <p class="text-slate-400 text-sm mt-1">${escapeHtml(app.contactEmail)}</p>
-                  <p class="text-slate-400 text-xs mt-1 leading-relaxed">
-                    Envoyé le : ${formatDate(app.sentDate)} • Délai choisi : ${app.delayDays} jours • Date de relance cible : ${dueDate}
+                  <p class="text-slate-400 text-sm mt-1">${escapeHtml(app.email_contact)}</p>
+                  <p class="text-slate-400 text-xs mt-1">
+                    Envoyé le : ${formatDate(app.date_envoi)} • Délai : ${app.delai} jours • Relance : ${dueDate}
                   </p>
                 </div>
 
                 <div class="flex flex-wrap gap-2">
-                  ${due ? `<button onclick="openMailClientById('${app.id}')" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold transition text-sm">Relancer</button>` : ''}
-                  <button onclick="editApp('${app.id}')" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 transition text-sm">Modifier</button>
-                  <button onclick="deleteApp('${app.id}')" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 transition text-sm">Supprimer</button>
+                  ${due ? `<button onclick="openMailClientById('${app.id}')" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold text-sm">Relancer</button>` : ''}
+                  <button onclick="editApp('${app.id}')" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-sm">Modifier</button>
+                  <button onclick="deleteApp('${app.id}')" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-sm">Supprimer</button>
                 </div>
               </div>
             </div>
@@ -248,44 +263,45 @@ Cordialement,
     }
 
     function escapeHtml(str) {
-      return String(str)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
+      return String(str).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
     }
 
     function openMailClientById(id) {
-      const app = state.applications.find(a => a.id === id);
+      const app = state.applications.find(a => a.id == id);
       if (app) openMailClient(app);
     }
 
     function editApp(id) {
-      const app = state.applications.find(a => a.id === id);
+      const app = state.applications.find(a => a.id == id);
       if (!app) return;
       
       editingAppId = id;
-      document.getElementById("companyName").value = app.companyName;
-      document.getElementById("contactEmail").value = app.contactEmail;
-      document.getElementById("sentDate").value = app.sentDate;
-      document.getElementById("delayDays").value = app.delayDays;
+      document.getElementById("companyName").value = app.nom_entreprise;
+      document.getElementById("contactEmail").value = app.email_contact;
+      document.getElementById("sentDate").value = app.date_envoi;
+      document.getElementById("delayDays").value = app.delai;
       
       document.getElementById("formTitle").textContent = "Modifier la candidature";
       const submitBtn = document.getElementById("submitFormBtn");
       submitBtn.textContent = "Mettre à jour la candidature";
       submitBtn.classList.replace("bg-blue-600", "bg-amber-600");
       submitBtn.classList.replace("hover:bg-blue-500", "hover:bg-amber-500");
-      
-      document.getElementById("appForm").scrollIntoView({ behavior: 'smooth' });
     }
 
-    function deleteApp(id) {
-      if (!confirm("Voulez-vous vraiment supprimer cette candidature ?")) return;
-      state.applications = state.applications.filter(a => a.id !== id);
-      if (editingAppId === id) resetForm();
-      saveState();
-      render();
+    async function deleteApp(id) {
+      if (!confirm("Supprimer cette candidature de la base de données ?")) return;
+      
+      const { error } = await supabase
+        .from('candidatures')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        alert("Erreur de suppression : " + error.message);
+      } else {
+        if (editingAppId == id) resetForm();
+        loadData();
+      }
     }
 
     function resetForm() {
@@ -299,85 +315,60 @@ Cordialement,
       submitBtn.classList.replace("hover:bg-amber-500", "hover:bg-blue-500");
     }
 
-    document.getElementById("appForm").addEventListener("submit", (e) => {
+    document.getElementById("appForm").addEventListener("submit", async (e) => {
       e.preventDefault();
 
-      const companyName = document.getElementById("companyName").value.trim();
-      const contactEmail = document.getElementById("contactEmail").value.trim();
-      const sentDate = document.getElementById("sentDate").value;
-      const delayDays = Number(document.getElementById("delayDays").value);
+      const nom_entreprise = document.getElementById("companyName").value.trim();
+      const email_contact = document.getElementById("contactEmail").value.trim();
+      const date_envoi = document.getElementById("sentDate").value;
+      const delai = Number(document.getElementById("delayDays").value);
 
       if (editingAppId) {
-        const app = state.applications.find(a => a.id === editingAppId);
-        if (app) {
-          app.companyName = companyName;
-          app.contactEmail = contactEmail;
-          app.sentDate = sentDate;
-          app.delayDays = delayDays;
-        }
+        // Envoi de la mise à jour à Supabase
+        const { error } = await supabase
+          .from('candidatures')
+          .update({ nom_entreprise, email_contact, date_envoi, delai })
+          .eq('id', editingAppId);
+          
+        if (error) alert("Erreur d'envoi : " + error.message);
       } else {
-        state.applications.push({
-          id: crypto.randomUUID(),
-          companyName,
-          contactEmail,
-          sentDate,
-          delayDays,
-          createdAt: new Date().toISOString()
-        });
+        // Insertion d'une nouvelle ligne sur Supabase
+        const { error } = await supabase
+          .from('candidatures')
+          .insert([{ nom_entreprise, email_contact, date_envoi, delai }]);
+          
+        if (error) alert("Erreur d'insertion : " + error.message);
       }
 
-      saveState();
       resetForm();
-      render();
+      loadData();
     });
 
     document.getElementById("saveTemplateBtn").addEventListener("click", () => {
       state.template.subject = document.getElementById("subjectTemplate").value;
       state.template.message = document.getElementById("messageTemplate").value;
-      saveState();
-      alert("Modèle d'e-mail sauvegardé !");
+      localStorage.setItem("cv_email_template", JSON.stringify(state.template));
+      alert("Modèle sauvegardé sur ce téléphone !");
     });
 
-    document.getElementById("clearAllBtn").addEventListener("click", () => {
-      if (!confirm("Attention, cela va supprimer toutes vos candidatures et restaurer le modèle par défaut. Continuer ?")) return;
-      localStorage.removeItem(STORAGE_KEY);
-      state = { applications: [], template: defaultTemplate };
+    document.getElementById("clearAllBtn").addEventListener("click", async () => {
+      if (!confirm("ATTENTION : Cela va vider TOUTE votre base de données Supabase. Continuer ?")) return;
+      
+      const { error } = await supabase
+        .from('candidatures')
+        .delete()
+        .neq('nom_entreprise', ''); // Supprime tout ce qui a un nom
+
+      if (error) alert("Erreur : " + error.message);
       resetForm();
-      render();
+      loadData();
     });
 
-    document.getElementById("refreshBtn").addEventListener("click", render);
+    document.getElementById("refreshBtn").addEventListener("click", loadData);
 
-    document.getElementById("exportBtn").addEventListener("click", () => {
-      const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "sauvegarde-mes-candidatures.json";
-      a.click();
-      URL.revokeObjectURL(url);
-    });
-
-    document.getElementById("importInput").addEventListener("change", async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      try {
-        const text = await file.text();
-        const imported = JSON.parse(text);
-        state.applications = Array.isArray(imported.applications) ? imported.applications : [];
-        state.template = imported.template || defaultTemplate;
-        saveState();
-        resetForm();
-        render();
-        alert("Données importées avec succès !");
-      } catch (err) {
-        alert("Fichier JSON invalide.");
-      }
-      e.target.value = "";
-    });
-
-    loadState();
-    render();
+    // Lancement
+    loadData();
   </script>
 </body>
 </html>
+
