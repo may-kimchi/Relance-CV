@@ -1,0 +1,31 @@
+name: Robot Relance Automatique CV
+
+on:
+  schedule:
+    # Se réveille automatiquement toutes les nuits à 05:00 UTC (soit 06h00 ou 07h00 du matin en France)
+    - cron: '0 5 * * *'
+  workflow_dispatch: # Permet d'avoir un bouton "Play" pour le tester manuellement
+
+jobs:
+  execution-robot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Installer les dépendances
+        run: |
+          pip install supabase
+
+      - name: Lancer le calcul et l'envoi
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        run: python script_robot.py
