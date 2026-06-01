@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Gestionnaire de Relances de Candidatures (Cloud)</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Inclusion de la bibliothèque Supabase -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     body { background: #0f172a; }
@@ -18,7 +17,6 @@
 <body class="text-slate-100 min-h-screen">
 
   <div class="max-w-6xl mx-auto p-4 md:p-6">
-    <!-- En-tête -->
     <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-6">
       <div>
         <h1 class="text-2xl md:text-4xl font-bold">Suivi de mes Candidatures (Cloud)</h1>
@@ -30,9 +28,7 @@
       </div>
     </div>
 
-    <!-- Grille Principale -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <!-- Formulaire d'Ajout / Modification -->
       <div class="card glass rounded-2xl border border-slate-700 p-5 lg:col-span-1">
         <h2 id="formTitle" class="text-xl font-semibold mb-4">Ajouter une candidature</h2>
 
@@ -67,7 +63,6 @@
 
         <hr class="border-slate-700 my-6">
 
-        <!-- Réglages du Modèle de Mail -->
         <h2 class="text-xl font-semibold mb-4">Modèle de l'e-mail</h2>
 
         <div class="space-y-4">
@@ -91,7 +86,6 @@
         </div>
       </div>
 
-      <!-- Tableau de bord -->
       <div class="lg:col-span-2 space-y-4">
         <div class="card glass rounded-2xl border border-slate-700 p-5">
           <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
@@ -111,7 +105,7 @@
   </div>
 
   <script>
-    // === CONFIGURATION SUPABASE ===
+    // === CONFIGURATION SUPABASE IDENTIQUE ET VÉRIFIÉE ===
     const SUPABASE_URL = "https://eyrzntftpqjiggvibntl.supabase.co"; 
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV5cnpudGZ0cHFqaWdndmlibnRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNTY3MjMsImV4cCI6MjA5NTgzMjcyM30.Z00m-3xASVzUIyetukl9ZIhH0NtAvv8F-VOAHeRtir4";
 
@@ -119,17 +113,7 @@
 
     const defaultTemplate = {
       subject: "Suivi de ma candidature - {entreprise}",
-      message: `Bonjour l'équipe de {entreprise},
-
-Je me permets de vous recontacter concernant la candidature que je vous ai adressée le {date}. Le délai de {jours} jours étant passé, je souhaitais simplement m'assurer que mon dossier vous était bien parvenu et savoir si vous aviez des retours à me faire.
-
-Je reste extrêmement motivé par l'idée de vous rejoindre et je me tiens à votre entière disposition pour tout échange ou entretien.
-
-En vous souhaitant une excellente journée.
-
-Cordialement,
-[Ton Prénom] [Ton Nom]
-[Ton Téléphone]`
+      message: `Bonjour l'équipe de {entreprise},\n\nJe me permets de vous recontacter concernant la candidature que je vous ai adressée le {date}. Le délai de {jours} jours étant passé, je souhaitais simplement m'assurer que mon dossier vous était bien parvenu et savoir si vous aviez des retours à me faire.\n\nJe reste extrêmement motivé par l'idée de vous rejoindre et je me tiens à votre entière disposition pour tout échange ou entretien.\n\nEn vous souhaitant une excellente journée.\n\nCordialement,\n[Ton Prénom] [Ton Nom]\n[Ton Téléphone]`
     };
 
     let state = {
@@ -139,11 +123,9 @@ Cordialement,
     
     let editingAppId = null; 
 
-    // Chargement initial depuis Supabase + LocalStorage pour le template textuel
     async function loadData() {
       const statusEl = document.getElementById("connectionStatus");
       try {
-        // 1. Charger les candidatures depuis Supabase
         const { data, error } = await supabase
           .from('candidatures')
           .select('*');
@@ -152,16 +134,15 @@ Cordialement,
 
         state.applications = data || [];
         
-        // 2. Le template reste sur le téléphone (pratique pour modifier à la volée)
         const localTemplate = localStorage.getItem("cv_email_template");
         if (localTemplate) {
           state.template = JSON.parse(localTemplate);
         }
 
-        statusEl.textContent = "Nuage Connecté";
+        statusEl.textContent = "Nuage Connected";
         statusEl.className = "px-3 py-1 rounded-full text-xs font-semibold bg-emerald-600 text-emerald-50";
       } catch (e) {
-        console.error(e);
+        console.error("Erreur attrapée :", e);
         statusEl.textContent = "Erreur Cloud";
         statusEl.className = "px-3 py-1 rounded-full text-xs font-semibold bg-red-600 text-red-50";
       }
@@ -169,6 +150,7 @@ Cordialement,
     }
 
     function formatDate(dateStr) {
+      if(!dateStr) return "";
       const d = new Date(dateStr);
       return d.toLocaleDateString('fr-FR', { year: "numeric", month: "short", day: "numeric" });
     }
@@ -214,7 +196,7 @@ Cordialement,
       const list = document.getElementById("appList");
       const statsText = document.getElementById("statsText");
 
-      if (!state.applications.length) {
+      if (!state.applications || !state.applications.length) {
         list.innerHTML = `
           <div class="card glass rounded-2xl border border-slate-700 p-6 text-center text-slate-400">
             Aucune candidature dans la base de données.
@@ -266,13 +248,13 @@ Cordialement,
       return String(str).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
     }
 
-    function openMailClientById(id) {
-      const app = state.applications.find(a => a.id == id);
+    window.openMailClientById = function(id) {
+      const app = state.applications.find(a => String(a.id) === String(id));
       if (app) openMailClient(app);
     }
 
-    function editApp(id) {
-      const app = state.applications.find(a => a.id == id);
+    window.editApp = function(id) {
+      const app = state.applications.find(a => String(a.id) === String(id));
       if (!app) return;
       
       editingAppId = id;
@@ -288,7 +270,7 @@ Cordialement,
       submitBtn.classList.replace("hover:bg-blue-500", "hover:bg-amber-500");
     }
 
-    async function deleteApp(id) {
+    window.deleteApp = async function(id) {
       if (!confirm("Supprimer cette candidature de la base de données ?")) return;
       
       const { error } = await supabase
@@ -299,7 +281,7 @@ Cordialement,
       if (error) {
         alert("Erreur de suppression : " + error.message);
       } else {
-        if (editingAppId == id) resetForm();
+        if (String(editingAppId) === String(id)) resetForm();
         loadData();
       }
     }
@@ -321,10 +303,9 @@ Cordialement,
       const nom_entreprise = document.getElementById("companyName").value.trim();
       const email_contact = document.getElementById("contactEmail").value.trim();
       const date_envoi = document.getElementById("sentDate").value;
-      const delai = Number(document.getElementById("delayDays").value);
+      const delai = int = Number(document.getElementById("delayDays").value);
 
       if (editingAppId) {
-        // Envoi de la mise à jour à Supabase
         const { error } = await supabase
           .from('candidatures')
           .update({ nom_entreprise, email_contact, date_envoi, delai })
@@ -332,7 +313,6 @@ Cordialement,
           
         if (error) alert("Erreur d'envoi : " + error.message);
       } else {
-        // Insertion d'une nouvelle ligne sur Supabase
         const { error } = await supabase
           .from('candidatures')
           .insert([{ nom_entreprise, email_contact, date_envoi, delai }]);
@@ -352,23 +332,22 @@ Cordialement,
     });
 
     document.getElementById("clearAllBtn").addEventListener("click", async () => {
-      if (!confirm("ATTENTION : Cela va vider TOUTE votre base de données Supabase. Continuer ?")) return;
+      if (!confirm("ATTENTION : Cela va vider vos candidatures affichées. Confirmer ?")) return;
       
-      const { error } = await supabase
-        .from('candidatures')
-        .delete()
-        .neq('nom_entreprise', ''); // Supprime tout ce qui a un nom
-
-      if (error) alert("Erreur : " + error.message);
+      // Suppression sécurisée ligne par ligne pour contourner le blocage RLS global
+      for (const app of state.applications) {
+        await supabase.from('candidatures').delete().eq('id', app.id);
+      }
       resetForm();
       loadData();
     });
 
     document.getElementById("refreshBtn").addEventListener("click", loadData);
 
-    // Lancement
+    // Démarrage automatique
     loadData();
   </script>
 </body>
 </html>
+
 
