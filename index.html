@@ -123,12 +123,17 @@
     
     let editingAppId = null; 
 
-    async function loadData() {
+        async function loadData() {
       const statusEl = document.getElementById("connectionStatus");
       try {
+        // === LIGNE DE DEBUG TEMPORAIRE À AJOUTER ===
+        supabase.from('candidatures').select('*').then(({data, error}) => { if(error) alert("Erreur Supabase : " + error.message); });
+        // ==========================================
+
         const { data, error } = await supabase
           .from('candidatures')
           .select('*');
+
 
         if (error) throw error;
 
